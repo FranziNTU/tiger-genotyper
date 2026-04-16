@@ -123,18 +123,23 @@ function startSampling(tigerId){
     document.getElementById('count').textContent=data.length+' / '+cfg.maxTigers;
   };
 
-  window.downloadCSV=()=>{
-    let csv='Tiger,Reserve,Locus,A,B
-';
-    data.forEach(r=>{Object.entries(r.loci).forEach(l=>{
-      csv+=`${r.id},${r.reserve},${l[0]},${l[1][0]},${l[1][1]}
+  window.downloadCSV = () => {
+  let csv = `Tiger,Reserve,Locus,A,B
 `;
-    });});
-    const a=document.createElement('a');
-    a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
-    a.download=g+'_genotypes.csv';
-    a.click();
-  };
+
+  data.forEach(r => {
+    Object.entries(r.loci).forEach(l => {
+      csv += `${r.id},${r.reserve},${l[0]},${l[1][0]},${l[1][1]}
+`;
+    });
+  });
+
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = g + '_genotypes.csv';
+  a.click();
+};
 }
 </script>
 </body>
