@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Tiger Microsatellite Sampler</title>
+<style>
+  body { font-family: Arial, sans-serif; padding: 1.2rem; max-width: 1200px; margin: auto; }
+  h2 { margin: 0 0 0.5rem 0; }
+  .hidden { display: none; }
+  .controls { margin-bottom: 0.75rem; }
+  .pill { display:inline-block; padding:0.25rem 0.5rem; border-radius:999px; background:#eef; margin-right:0.5rem; }
+  table { border-collapse: collapse; width: 100%; margin-top: 0.75rem; }
+  th, td { border: 1px solid #ccc; padding: 0.35rem; text-align: center; font-size: 0.9rem; }
+  th { background: #f6f6f6; }
+  button { padding: 0.45rem 0.7rem; margin-right: 0.4rem; }
+  .trace-wrap { display:flex; gap:0.75rem; align-items:center; margin-top:0.5rem; }
+  .trace-label { font-size: 0.85rem; color:#555; }
+  svg { background:#111; border-radius:4px; }
+  .note { font-size: 0.85rem; color:#555; margin-top:0.4rem; }
+</style>
+</head>
+<body>
+
+<h2>Tiger Microsatellite Sampler</h2>
+
+<!-- STAFF CONTROLS (hidden behind passcode) -->
+<div id="staffControls" class="controls">
+  <button id="staffResetBtn">Staff reset (end class)</button>
+</div>
+
+<!-- Sampling area ONLY -->
+<div id="sampling">
+  <div class="controls">
+    <span class="pill" id="pillGroup"></span>
+    <span class="pill" id="pillReserve"></span>
+    <span class="pill" id="pillLat"></span>
+    <span class="pill" id="pillID"></span>
+  </div>
+
+  <div class="trace-wrap">
+    <svg id="trace" width="420" height="90" viewBox="0 0 420 90" aria-label="Chromatogram">
+      <polyline id="traceLine" fill="none" stroke="#2ecc71" stroke-width="2" points="" />
+    </svg>
+    <div class="trace-label">Chromatogram (simulated)</div>
+  </div>
+
+  <div class="controls">
+    <button id="addBtn">Add individual to dataset</button>
+    <button id="csvBtn">Download CSV (wide format)</button>
+  </div>
+
+  <table id="table"></table>
+</div>
+
+<script>
+/**************** DEMO DATA ****************/
+const DB = {
+  'KAN_014': { Reserve:'Kanha', Latitude:22.334, Individual:'KAN_014', loci:{ MS01:[102,104], MS02:[100,100], MS03:[106,108], MS04:[104,106], MS05:[102,102], MS06:[110,112], MS07:[98,100], MS08:[120,122], MS09:[154,156], MS10:[178,178] } },
+  'SIM_003': { Reserve:'Simlipal', Latitude:21.932, Individual:'SIM_003', loci:{ MS01:[108,110], MS02:[108,108], MS03:[106,110], MS04:[104,106], MS05:[102,102], MS06:[114,114], MS07:[96,98], MS08:[118,120], MS09:[152,154], MS10:[180,182] } },
+  'ZOO_003': { Reserve:'Zoo', Latitude:0.0, Individual:'ZOO_003', loci:{ MS01:[102,102], MS02:[100,102], MS03:[104,104], MS04:[106,106], MS05:[102,104], MS06:[110,110], MS07:[98,98], MS08:[120,120], MS09:[154,154], MS10:[178,180] } }
+};
+
+/**************** GROUP HANDLING ****************/
+let groupId = localStorage.getItem('groupId');
+if (!groupId) {
+  groupId = prompt('Enter your group ID (G1–G6):');
+  localStorage.setItem('groupId', groupId);
+}
+const DATA_KEY = `dataset_${groupId}`;
+let dataset = JSON.parse(localStorage.getItem(DATA_KEY) || '[]');
+
+const params = new URLSearchParams(location.search);
+const tigerId = params.get('tiger');
+const maxLoci = 10;
+
+// Pills
+pillGroup.textContent = 'Group: ' + groupId;
+
+/**************** CHROMATOGRAM ****************/
+function animateTrace(){
+  const line = traceLine;
+  const pts = [];
+  let x = 0;
+  let phase = 0;
+  function tick(){
+    if(x > 420) return;
+    const y = 45 + Math.sin(phase) * (10 + Math.random()*6);
+    pts.push(`${x},${y.toFixed(1)}`);
+    line.setAttribute('points', pts.join(' '));
+    x += 6;
+    phase += 0.3;
+    requestAnimationFrame(tick);
+  }
+  line.setAttribute('points','');
+  tick();
+}
+
+/**************** SAMPLING ****************/
+if (tigerId && DB[tigerId]) {
+  const row = DB[tigerId];
+  pillReserve.textContent = 'Reserve: ' + row.Reserve;
+  pillLat.textContent = 'Latitude: ' + row.Latitude;
+  pillID.textContent = 'Individual: ' + row.Individual;
+
+  animateTrace();
+  renderTable();
+}
+
+addBtn.onclick = () => {
+  if(dataset.find(d=>d.Individual===tigerId)){
+    alert('Already added by your group'); return;
+  }
+  const src = DB[tigerId];
+  const lociKeys = Object.keys(src.loci).slice(0, maxLoci);
+  const record = { Reserve: src.Reserve, Latitude: src.Latitude, Individual: src.Individual };
+  lociKeys.forEach(k=>{
+    record[`${k}_A`] = src.loci[k][0];
+    record[`${k}_B`] = src.loci[k][1];
+  });
+  dataset.push(record);
+  localStorage.setItem(DATA_KEY, JSON.stringify(dataset));
+  renderTable();
+}
+
+function renderTable(){
+  table.innerHTML='';
+  if(dataset.length===0){ table.innerHTML='<tr><td>No data yet</td></tr>'; return; }
+  const cols = Object.keys(dataset[0]);
+  table.innerHTML = '<tr>'+cols.map(c=>`<th>${c}</th>`).join('')+'</tr>' +
+    dataset.map(r=>'<tr>'+cols.map(c=>`<td>${r[c]}</td>`).join('')+'</tr>').join('');
+}
+
+csvBtn.onclick = () => {
+  if(dataset.length===0){ alert('No data to export'); return; }
+  const cols = Object.keys(dataset[0]);
+  let csv = cols.join(',') + '\n';
+  dataset.forEach(r=>{ csv += cols.map(c=>r[c]).join(',') + '\n'; });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv'}));
+  a.download = `${groupId}_tiger_microsatellites_wide.csv`;
+  a.click();
+};
+
+/**************** STAFF RESET ****************/
+staffResetBtn.onclick = () => {
+  const code = prompt('Staff code required to reset all groups:');
+  if(code !== 'RESET2026') return;
+  Object.keys(localStorage)
+    .filter(k => k.startsWith('dataset_') || k==='groupId')
+    .forEach(k => localStorage.removeItem(k));
+  alert('Session reset for all groups.');
+  location.reload();
+};
+</script>
+</body>
+</html>
