@@ -66,9 +66,7 @@ svg { background:#111; border-radius:4px; }
   <p>Enter limits for each group based on their budgets.</p>
 
   <table>
-    <tr>
-      <th>Group</th><th>Max individuals</th><th>Max loci</th>
-    </tr>
+    <tr><th>Group</th><th>Max individuals</th><th>Max loci</th></tr>
     <tr><td>G1</td><td><input id="G1_i" type="number"></td><td><input id="G1_l" type="number"></td></tr>
     <tr><td>G2</td><td><input id="G2_i" type="number"></td><td><input id="G2_l" type="number"></td></tr>
     <tr><td>G3</td><td><input id="G3_i" type="number"></td><td><input id="G3_l" type="number"></td></tr>
@@ -81,6 +79,7 @@ svg { background:#111; border-radius:4px; }
     <button id="startSampling">Start sampling</button>
     <button id="resetSession">Reset session (staff)</button>
   </div>
+
   <div id="adminMsg" class="success hidden"></div>
 </div>
 
@@ -119,22 +118,41 @@ svg { background:#111; border-radius:4px; }
 </div>
 
 <script>
-/* ================= MASTER DATA ================= */
+/* ---------- EXPLICIT DOM BINDING (critical) ---------- */
+const admin         = document.getElementById('admin');
+const wait          = document.getElementById('wait');
+const sampling      = document.getElementById('sampling');
 
+const startSampling = document.getElementById('startSampling');
+const resetSession  = document.getElementById('resetSession');
+const adminMsg      = document.getElementById('adminMsg');
+
+const resetMyGroup1 = document.getElementById('resetMyGroup1');
+const resetMyGroup2 = document.getElementById('resetMyGroup2');
+
+const pillGroup     = document.getElementById('pillGroup');
+const pillTiger     = document.getElementById('pillTiger');
+
+const chromTrace    = document.getElementById('chromTrace');
+const currentTable  = document.getElementById('currentTable');
+const dataTable     = document.getElementById('dataTable');
+
+const addBtn        = document.getElementById('addBtn');
+const csvBtn        = document.getElementById('csvBtn');
+
+/* ---------- MASTER GENOTYPE DATA ---------- */
 const DB = {
   KAN_014: {
-    Reserve: 'Kanha',
-    Latitude: 22.334,
-    loci: {
+    Reserve:'Kanha', Latitude:22.334,
+    loci:{
       MS01:[102,104], MS02:[100,100], MS03:[106,108], MS04:[104,106],
       MS05:[102,102], MS06:[110,112], MS07:[98,100], MS08:[120,122],
       MS09:[154,156], MS10:[178,178]
     }
   },
   SIM_003: {
-    Reserve: 'Simlipal',
-    Latitude: 21.93,
-    loci: {
+    Reserve:'Simlipal', Latitude:21.93,
+    loci:{
       MS01:[108,110], MS02:[108,108], MS03:[106,110], MS04:[104,106],
       MS05:[102,102], MS06:[114,114], MS07:[96,98], MS08:[118,120],
       MS09:[152,154], MS10:[180,182]
@@ -142,29 +160,33 @@ const DB = {
   }
 };
 
-/* ================= ROUTING ================= */
-
-const params = new URLSearchParams(location.search);
-const tigerId = params.get('tiger');
-const sessionReady = localStorage.getItem('session_ready') === 'true';
-
+/* ---------- ROUTING ---------- */
 function show(el){ el.classList.remove('hidden'); }
 function hide(el){ el.classList.add('hidden'); }
 
 hide(admin); hide(wait); hide(sampling);
 
-if (!tigerId) show(admin);
-else if (!sessionReady) show(wait);
-else samplingEntry();
+const params = new URLSearchParams(location.search);
+const tigerId = params.get('tiger');
+const sessionReady = localStorage.getItem('session_ready') === 'true';
 
-/* ================= ADMIN ================= */
+if (!tigerId) {
+  show(admin);
+} else if (!sessionReady) {
+  show(wait);
+} else {
+  samplingEntry();
+}
 
+/* ---------- ADMIN ---------- */
 startSampling.onclick = () => {
   ['G1','G2','G3','G4','G5','G6'].forEach(g => {
     const i = document.getElementById(g+'_i').value;
     const l = document.getElementById(g+'_l').value;
     if (i && l) {
-      localStorage.setItem('cfg_'+g, JSON.stringify({ maxIndividuals:+i, maxLoci:+l }));
+      localStorage.setItem('cfg_'+g, JSON.stringify({
+        maxIndividuals:+i, maxLoci:+l
+      }));
     }
   });
   localStorage.setItem('session_ready','true');
@@ -179,8 +201,7 @@ resetSession.onclick = () => {
   location.reload();
 };
 
-/* ================= SAMPLING ================= */
-
+/* ---------- SAMPLING ---------- */
 function samplingEntry() {
   let group = localStorage.getItem('groupId');
   if (!group) {
@@ -201,7 +222,7 @@ function samplingEntry() {
   renderCurrent(src, loci);
   animateChrom();
 
-  const DATA_KEY = 'dataset_'+group;
+  const DATA_KEY = 'dataset_' + group;
   let dataset = JSON.parse(localStorage.getItem(DATA_KEY) || '[]');
   renderDataset();
 
@@ -224,8 +245,8 @@ function samplingEntry() {
   csvBtn.onclick = () => {
     if (!dataset.length) return;
     const cols = Object.keys(dataset[0]);
-    let csv = cols.join(',') + '\n';
-    dataset.forEach(r => csv += cols.map(c => r[c]).join(',') + '\n');
+    let csv = cols.join(',') + '\\n';
+    dataset.forEach(r => csv += cols.map(c => r[c]).join(',') + '\\n');
 
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([csv]));
@@ -234,12 +255,50 @@ function samplingEntry() {
   };
 
   function renderCurrent(src, loci) {
-    currentTable.innerHTML = '<tr><th>Locus</th><th>Allele A</th><th>Allele B</th></tr>';
+    currentTable.innerHTML =
+      '<tr><th>Locus</th><th>Allele A</th><th>Allele B</th></tr>';
     loci.forEach(l => {
       const [a,b] = src.loci[l];
-      currentTable.innerHTML += `<tr><td>${l}</td><td>${a}</td><td>${b}</td></tr>`;
+      currentTable.innerHTML +=
+        `<tr><td>${l}</td><td>${a}</td><td>${b}</td></tr>`;
     });
   }
 
   function renderDataset() {
     dataTable.innerHTML = '';
+    if (!dataset.length) {
+      dataTable.innerHTML = '<tr><td>No data yet</td></tr>'; return;
+    }
+    const cols = Object.keys(dataset[0]);
+    dataTable.innerHTML =
+      '<tr>' + cols.map(c=>`<th>${c}</th>`).join('') + '</tr>' +
+      dataset.map(r =>
+        '<tr>' + cols.map(c=>`<td>${r[c]}</td>`).join('') + '</tr>'
+      ).join('');
+  }
+}
+
+/* ---------- CHROMATOGRAM ---------- */
+function animateChrom() {
+  const pts = [];
+  let x = 0, p = 0;
+  chromTrace.setAttribute('points','');
+  (function step(){
+    if (x > 420) return;
+    pts.push(`${x},${(45 + Math.sin(p)*(10+Math.random()*6)).toFixed(1)}`);
+    chromTrace.setAttribute('points', pts.join(' '));
+    x += 6; p += 0.3;
+    requestAnimationFrame(step);
+  })();
+}
+
+/* ---------- RESET GROUP ---------- */
+function resetGroup() {
+  localStorage.removeItem('groupId');
+  location.reload();
+}
+resetMyGroup1.onclick = resetGroup;
+resetMyGroup2.onclick = resetGroup;
+</script>
+</body>
+</html>
