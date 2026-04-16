@@ -1,52 +1,6 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Tiger Microsatellite Sampler – Part A</title>
-
-<style>
-body {
-  font-family: Arial, sans-serif;
-  padding: 1.5rem;
-  max-width: 700px;
-  margin: auto;
-}
-.hidden { display: none; }
-
-button {
-  padding: 0.5rem 1rem;
-  margin-top: 0.6rem;
-}
-
-.warning {
-  background: #fff3cd;
-  border: 1px solid #ffeeba;
-  padding: 1rem;
-}
-
-.success {
-  background: #e6fffa;
-  border: 1px solid #b2f5ea;
-  padding: 1rem;
-}
-
-.danger {
-  background: #fde8e8;
-  border: 1px solid #f5b5b5;
-  padding: 1rem;
-}
-</style>
-</head>
-
-<body>
-
-<h2>Tiger Microsatellite Sampler</h2>
-
-<!-- ================= ADMIN ================= -->
-<div id="admin" class="hidden">
-  <h3>Session setup (staff)</h3>
-  <p>This page has no <code>?tiger=</code> parameter.</p>
+<html lang="number"></td></tr><html lang="en">
+  </table>
 
   <button id="startSession">Start new sampling session</button>
   <button id="resetSession">Reset everything</button>
@@ -78,7 +32,7 @@ const el = id => document.getElementById(id);
 function show(e){ e.classList.remove('hidden'); }
 function hide(e){ e.classList.add('hidden'); }
 
-/* ---------- DOM ---------- */
+/* ---------- MAIN VIEWS ---------- */
 const adminDiv    = el('admin');
 const waitDiv     = el('wait');
 const staleDiv    = el('stale');
@@ -124,23 +78,51 @@ else if (!activeSession) {
 // SAMPLING
 else {
   localStorage.setItem('session_seen', activeSession);
-  show(samplingDiv);
-  el('sampleInfo').textContent =
-    'Sampling individual: ' + tiger +
-    ' (session ' + activeSession + ')';
+
+  let group = localStorage.getItem('groupId');
+  if (!group) {
+    group = prompt('Enter your group ID (G1–G6)');
+    localStorage.setItem('groupId', group);
+  }
+
+  const cfg = JSON.parse(localStorage.getItem('cfg_' + group) || 'null');
+  if (!cfg || cfg.session !== activeSession) {
+    show(staleDiv);
+  } else {
+    show(samplingDiv);
+    el('sampleInfo').textContent =
+      'Tiger: ' + tiger +
+      ' | Group: ' + group +
+      ' | Max loci: ' + cfg.maxLoci +
+      ' | Max individuals: ' + cfg.maxIndividuals;
+  }
 }
 
-/* ---------- ADMIN CONTROLS ---------- */
+/* ---------- ADMIN ACTIONS ---------- */
 el('startSession').onclick = () => {
   const sid = crypto.randomUUID();
   localStorage.setItem('SESSION_ID', sid);
+
+  ['G1','G2','G3','G4','G5','G6'].forEach(g => {
+    const i = el(g+'_i').value;
+    const l = el(g+'_l').value;
+    if (i && l) {
+      localStorage.setItem('cfg_'+g, JSON.stringify({
+        maxIndividuals: +i,
+        maxLoci: +l,
+        session: sid
+      }));
+      localStorage.removeItem('dataset_'+g);
+    }
+  });
+
   adminMsg.textContent =
-    '✅ Sampling session started (' + sid.slice(0,8) + ')';
+    '✅ New sampling session started (' + sid.slice(0,8) + ')';
   show(adminMsg);
 };
 
 el('resetSession').onclick = () => {
-  if (!confirm('Clear all session state?')) return;
+  if (!confirm('Clear all session data?')) return;
   localStorage.clear();
   location.reload();
 };
@@ -148,3 +130,69 @@ el('resetSession').onclick = () => {
 
 </body>
 </html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tiger Microsatellite Sampler</title>
+
+<style>
+body {
+  font-family: Arial, sans-serif;
+  padding: 1.5rem;
+  max-width: 900px;
+  margin: auto;
+}
+.hidden { display: none; }
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  margin-top: 0.6rem;
+}
+th, td {
+  border: 1px solid #ccc;
+  padding: 0.4rem;
+  text-align: center;
+}
+th { background: #f5f5f5; }
+
+button {
+  padding: 0.5rem 1rem;
+  margin-top: 0.6rem;
+  margin-right: 0.4rem;
+}
+
+.warning {
+  background: #fff3cd;
+  border: 1px solid #ffeeba;
+  padding: 1rem;
+}
+.success {
+  background: #e6fffa;
+  border: 1px solid #b2f5ea;
+  padding: 1rem;
+}
+.danger {
+  background: #fde8e8;
+  border: 1px solid #f5b5b5;
+  padding: 1rem;
+}
+</style>
+</head>
+
+<body>
+
+<h2>Tiger Microsatellite Sampler</h2>
+
+<!-- ================= ADMIN ================= -->
+<div id="admin" class="hidden">
+  <h3>Session setup (staff)</h3>
+  <p>Specify limits for each group, then start a new session.</p>
+
+  <table>
+    <tr><th>Group</th><th>Max individuals</th><th>Max loci</th></tr>
+    <tr><td>G1</td><td><input id="G1_i" type="number"></td><td><input id="G1_l" type="number"></td></tr>
+    <tr><td>G2</td><td><input id="G2_i" type="number"></td><td><input id="G2_l" type="number"></td></tr>
+    <tr><td>G3</td><td><input id="G3_i" type="number"></td><td><input id="G3_l" type="number"></td></tr>
+    <tr><td>G4</td><td><input id="G4_i" type="number"></td><td><input id="G4_l" type="number"></td></tr>
+    <tr><td>G5</td><td><input id="G5_i" type="number"></td><td><input id="G5_l" type="number"></td></tr>
