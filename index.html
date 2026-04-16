@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Microsatellite Sampling – Admin Demo</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<style>
+  body { font-family: sans-serif; margin: 2rem; }
+  h2 { margin-top: 2rem; }
+  button { margin: 0.25rem 0; padding: 0.5rem 1rem; }
+  .warn { color: darkred; }
+  .ok { color: darkgreen; }
+  .box { border: 1px solid #ccc; padding: 1rem; margin-top: 1rem; }
+  label { display: block; margin-top: 0.5rem; }
+</style>
+</head>
+<body>
+
+<h1>Microsatellite Sampler – Admin Controls (Demo)</h1>
+
+<div class="box">
+  <h2>1. Specify group limits</h2>
+  <label>Group A limit <input id="ga" type="number" min="1" /></label>
+  <label>Group B limit <input id="gb" type="number" min="1" /></label>
+  <button onclick="saveLimits()">Save limits</button>
+  <div id="limitsStatus"></div>
+</div>
+
+<div class="box">
+  <h2>2. Sampling control</h2>
+  <button id="enableBtn" onclick="enableSampling()" disabled>Enable sampling</button>
+  <button onclick="adminReset()">Admin reset (global)</button>
+  <div id="samplingStatus"></div>
+</div>
+
+<div class="box">
+  <h2>3. Local testing tools</h2>
+  <button onclick="localReset()">Local reset (this browser only)</button>
+</div>
+
+<hr />
+<h2>Sampler-side check simulation</h2>
+<button onclick="openSampler()">Open sampler page</button>
+
+<script>
+// ----- Admin logic -----
+function saveLimits() {
+  const ga = document.getElementById('ga').value;
+  const gb = document.getElementById('gb').value;
+  if (!ga || !gb) {
+    document.getElementById('limitsStatus').innerHTML = '<p class="warn">Both limits must be set.</p>';
+    return;
+  }
+  localStorage.setItem('group_limits', JSON.stringify({A: ga, B: gb}));
+  document.getElementById('limitsStatus').innerHTML = '<p class="ok">Limits saved.</p>';
+  document.getElementById('enableBtn').disabled = false;
+}
+
+function enableSampling() {
+  localStorage.setItem('sampling_enabled', 'true');
+  localStorage.setItem('sampling_enabled_at', new Date().toISOString());
+  renderStatus();
+}
+
+function adminReset() {
+  if (!confirm('This will delete all data and disable sampling. Continue?')) return;
+  localStorage.removeItem('sampling_enabled');
+  localStorage.removeItem('sampling_enabled_at');
+  localStorage.removeItem('sampled_data');
+  renderStatus();
+}
+
+// ----- Local reset -----
+function localReset() {
+  localStorage.clear();
+  sessionStorage.clear();
+  location.reload();
+}
+
+function renderStatus() {
+  const enabled = localStorage.getItem('sampling_enabled') === 'true';
+  document.getElementById('samplingStatus').innerHTML = enabled
+    ? '<p class="ok">Sampling is ENABLED.</p>'
+    : '<p class="warn">Sampling is NOT enabled.</p>';
+}
+
+renderStatus();
+
+// ----- Sampler simulation -----
+function openSampler() {
+  const enabled = localStorage.getItem('sampling_enabled') === 'true';
+  if (!enabled) {
+    alert('Sampler says: Sampling has not yet been enabled.');
+  } else {
+    alert('Sampler says: Sampling enabled. You may sample now.');
+  }
+}
+</script>
+
+</body>
+</html>
