@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Tiger Microsatellite Sampler</title>
+<style>
+  body { font-family: Arial, sans-serif; padding: 1.2rem; max-width: 1200px; margin: auto; }
+  h2 { margin: 0 0 0.4rem 0; }
+  h3 { margin: 1rem 0 0.3rem 0; }
+  .hidden { display:none; }
+  .controls { margin-bottom:0.75rem; }
+  .pill { display:inline-block; padding:0.3rem 0.6rem; border-radius:999px; background:#eef; margin-right:0.5rem; }
+  table { border-collapse: collapse; width:100%; margin-top:0.75rem; }
+  th,td { border:1px solid #ccc; padding:0.35rem; text-align:center; }
+  th { background:#f5f5f5; }
+  button { padding:0.45rem 0.8rem; margin-right:0.4rem; }
+  .warning { background:#fff3cd; border:1px solid #ffeeba; padding:0.75rem; margin:0.75rem 0; }
+  .success { background:#e6fffa; border:1px solid #b2f5ea; padding:0.75rem; margin-top:0.75rem; }
+  svg { background:#111; border-radius:4px; }
+</style>
+</head>
+<body>
+
+<h2>Tiger Microsatellite Sampler</h2>
+
+<!-- ADMIN -->
+<div id="admin" class="hidden">
+  <h3>Session setup</h3>
+  <p>Enter limits for each group.</p>
+  <table>
+    <tr><th>Group</th><th>Individuals</th><th>Loci</th></tr>
+    <tr><td>G1</td><td><input id="G1_i" type="number"></td><td><input id="G1_l" type="number"></td></tr>
+    <tr><td>G2</td><td><input id="G2_i" type="number"></td><td><input id="G2_l" type="number"></td></tr>
+    <tr><td>G3</td><td><input id="G3_i" type="number"></td><td><input id="G3_l" type="number"></td></tr>
+    <tr><td>G4</td><td><input id="G4_i" type="number"></td><td><input id="G4_l" type="number"></td></tr>
+    <tr><td>G5</td><td><input id="G5_i" type="number"></td><td><input id="G5_l" type="number"></td></tr>
+    <tr><td>G6</td><td><input id="G6_i" type="number"></td><td><input id="G6_l" type="number"></td></tr>
+  </table>
+  <button id="startBtn">Start sampling</button>
+  <button id="resetBtn">Reset session (staff)</button>
+  <div id="adminMsg" class="success hidden"></div>
+</div>
+
+<!-- WAIT -->
+<div id="wait" class="warning hidden">
+  <strong>Sampling not yet started.</strong><br>
+  Please wait for your instructor.
+  <div class="controls"><button id="resetGroup1">Reset my group (this device)</button></div>
+</div>
+
+<!-- SAMPLING -->
+<div id="sampling" class="hidden">
+  <div class="controls">
+    <span class="pill" id="pGroup"></span>
+    <span class="pill" id="pTiger"></span>
+    <button id="resetGroup2">Reset my group</button>
+  </div>
+
+  <svg width="420" height="90" viewBox="0 0 420 90">
+    <polyline id="trace" fill="none" stroke="#2ecc71" stroke-width="2" points="" />
+  </svg>
+
+  <div class="controls">
+    <button id="addBtn">Add individual</button>
+    <button id="csvBtn">Download CSV</button>
+  </div>
+
+  <table id="dataTable"></table>
+</div>
+
+<script>
+/******** DATA ********/
+const DB={KAN_014:{Reserve:'Kanha',Latitude:22.334,loci:{MS01:[102,104],MS02:[100,100],MS03:[106,108],MS04:[104,106],MS05:[102,102]}},SIM_003:{Reserve:'Simlipal',Latitude:21.9,loci:{MS01:[108,110],MS02:[108,108],MS03:[106,110],MS04:[104,106],MS05:[102,102]}}};
+
+/******** ROUTE ********/
+const params=new URLSearchParams(location.search);
+const tiger=params.get('tiger');
+const ready=localStorage.getItem('session_ready')==='true';
+
+function show(el){el.classList.remove('hidden');}
+function hide(el){el.classList.add('hidden');}
+
+hide(admin);hide(wait);hide(sampling);
+
+if(!tiger){ show(admin); }
+else if(!ready){ show(wait); }
+else{ startSampling(); }
+
+/******** ADMIN ********/
+startBtn.onclick=()=>{
+ ['G1','G2','G3','G4','G5','G6'].forEach(g=>{
+  const i=document.getElementById(g+'_i').value;
+  const l=document.getElementById(g+'_l').value;
+  if(i&&l) localStorage.setItem('cfg_'+g,JSON.stringify({maxIndividuals:+i,maxLoci:+l}));
+ });
+ localStorage.setItem('session_ready','true');
+ adminMsg.textContent='✅ Sampling started. Students may now scan QR codes.';
+ show(adminMsg);
+};
+
+resetBtn.onclick=()=>{
+ if(prompt('Staff code')!=='RESET2026')return;
+ localStorage.clear();alert('✅ Session reset complete.');location.reload();
+};
+
+/******** SAMPLING ********/
+function startSampling(){
+ let group=localStorage.getItem('groupId');
+ if(!group){ group=prompt('Enter your group ID (G1–G6)'); localStorage.setItem('groupId',group); }
+ const cfg=JSON.parse(localStorage.getItem('cfg_'+group)||'null');
+ if(!cfg){ show(wait);return; }
+
+ show(sampling);
+ pGroup.textContent='Group: '+group;
+ pTiger.textContent='Tiger: '+tiger;
+
+ const key='data_'+group;
+ let data=JSON.parse(localStorage.getItem(key)||'[]');
+ animate(); render();
+
+ addBtn.onclick=()=>{
+  if(data.length>=cfg.maxIndividuals) return alert('Limit reached');
+  if(data.find(d=>d.id===tiger)) return alert('Already added');
+  const row=DB[tiger]; const loci=Object.keys(row.loci).slice(0,cfg.maxLoci);
+  const rec={id:tiger,Reserve:row.Reserve,Latitude:row.Latitude};
+  loci.forEach(k=>{rec[k+'_A']=row.loci[k][0];rec[k+'_B']=row.loci[k][1];});
+  data.push(rec); localStorage.setItem(key,JSON.stringify(data)); render();
+ };
+
+ csvBtn.onclick=()=>{
+  if(!data.length)return; const cols=Object.keys(data[0]); let csv=cols.join(',')+'\n';
+  data.forEach(r=>{csv+=cols.map(c=>r[c]).join(',')+'\n';});
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv]));a.download=group+'.csv';a.click();
+ };
+
+ function render(){
+  dataTable.innerHTML=''; if(!data.length)return;
+  const cols=Object.keys(data[0]);
+  dataTable.innerHTML='<tr>'+cols.map(c=>'<th>'+c+'</th>').join('')+'</tr>'+
+    data.map(r=>'<tr>'+cols.map(c=>'<td>'+r[c]+'</td>').join('')+'</tr>').join('');
+ }
+}
+
+/******** TRACE ********/
+function animate(){
+ const pts=[]; let x=0,p=0; trace.setAttribute('points','');
+ (function t(){ if(x>420)return; pts.push(x+','+(45+Math.sin(p)*12).toFixed(1)); trace.setAttribute('points',pts.join(' ')); x+=6;p+=0.4; requestAnimationFrame(t); })();
+}
+
+/******** RESET GROUP ********/
+function resetGroup(){ localStorage.removeItem('groupId'); location.reload(); }
+resetGroup1.onclick=resetGroup; resetGroup2.onclick=resetGroup;
+</script>
+</body>
+</html>
