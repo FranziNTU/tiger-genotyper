@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Tiger Microsatellite Sampler</title>
+<style>
+  body { font-family: Arial, sans-serif; padding: 1.2rem; max-width: 1200px; margin: auto; }
+  h2 { margin: 0 0 0.25rem 0; }
+  h3 { margin: 0.75rem 0 0.25rem 0; }
+  .hidden { display: none; }
+  .controls { margin-bottom: 0.75rem; }
+  .pill { display:inline-block; padding:0.25rem 0.5rem; border-radius:999px; background:#eef; margin-right:0.5rem; }
+  table { border-collapse: collapse; width: 100%; margin-top: 0.75rem; }
+  th, td { border: 1px solid #ccc; padding: 0.35rem; text-align: center; font-size: 0.9rem; }
+  th { background: #f6f6f6; }
+  button { padding: 0.45rem 0.7rem; margin-right: 0.4rem; }
+  input { padding: 0.25rem; width: 5rem; }
+  .note { font-size: 0.85rem; color:#555; }
+  .warning { background:#fff3cd; border:1px solid #ffeeba; padding:0.75rem; margin:0.75rem 0; }
+</style>
+</head>
+<body>
+
+<h2>Tiger Microsatellite Sampler</h2>
+
+<!-- ADMIN SETUP (staff laptop only) -->
+<div id="setup" class="controls hidden">
+  <h3>Session setup</h3>
+  <div class="note">Enter limits for each group, based on their budgets.</div>
+  <table>
+    <tr><th>Group</th><th>Max Individuals</th><th>Max Loci</th></tr>
+    <tr><td>G1</td><td><input id="G1_i" type="number"></td><td><input id="G1_l" type="number"></td></tr>
+    <tr><td>G2</td><td><input id="G2_i" type="number"></td><td><input id="G2_l" type="number"></td></tr>
+    <tr><td>G3</td><td><input id="G3_i" type="number"></td><td><input id="G3_l" type="number"></td></tr>
+    <tr><td>G4</td><td><input id="G4_i" type="number"></td><td><input id="G4_l" type="number"></td></tr>
+    <tr><td>G5</td><td><input id="G5_i" type="number"></td><td><input id="G5_l" type="number"></td></tr>
+    <tr><td>G6</td><td><input id="G6_i" type="number"></td><td><input id="G6_l" type="number"></td></tr>
+  </table>
+  <button id="startBtn">Start sampling</button>
+  <button id="resetBtn">Reset session (staff)</button>
+</div>
+
+<div id="waitMsg" class="warning hidden">
+  Sampling not yet started. Please wait for your instructor.
+</div>
+
+<!-- SAMPLING -->
+<div id="sampling" class="hidden">
+  <div class="controls">
+    <span class="pill" id="pillGroup"></span>
+    <span class="pill" id="pillID"></span>
+    <button id="leaveGroupBtn">Reset my group (this device)</button>
+  </div>
+  <p class="note">Sampling view active.</p>
+</div>
+
+<script>
+const params = new URLSearchParams(location.search);
+const tiger = params.get('tiger');
+const SESSION_READY = localStorage.getItem('session_ready') === 'true';
+
+// ROUTING
+if (!tiger) {
+  setup.classList.remove('hidden');
+}
+
+if (tiger && !SESSION_READY) {
+  waitMsg.classList.remove('hidden');
+}
+
+// START SAMPLING (ADMIN)
+startBtn.onclick = () => {
+  ['G1','G2','G3','G4','G5','G6'].forEach(g => {
+    const i = document.getElementById(g+'_i').value;
+    const l = document.getElementById(g+'_l').value;
+    if (i && l) localStorage.setItem('cfg_'+g, JSON.stringify({maxIndividuals:+i, maxLoci:+l}));
+  });
+  localStorage.setItem('session_ready','true');
+  alert('Sampling started. Students may now scan QR codes.');
+};
+
+// STAFF RESET
+resetBtn.onclick = () => {
+  const c = prompt('Staff code');
+  if (c !== 'RESET2026') return;
+  localStorage.clear();
+  location.reload();
+};
+
+// SAMPLING ENTRY
+if (tiger && SESSION_READY) {
+  let group = localStorage.getItem('groupId');
+  if (!group) {
+    group = prompt('Enter your group ID (G1–G6)');
+    localStorage.setItem('groupId', group);
+  }
+  const cfg = localStorage.getItem('cfg_'+group);
+  if (!cfg) {
+    waitMsg.classList.remove('hidden');
+  } else {
+    sampling.classList.remove('hidden');
+    pillGroup.textContent = 'Group: '+group;
+    pillID.textContent = 'Tiger: '+tiger;
+  }
+}
+
+// RESET MY GROUP (STUDENT)
+leaveGroupBtn.onclick = () => {
+  localStorage.removeItem('groupId');
+  alert('This device has been removed from its group. Reloading…');
+  location.reload();
+};
+</script>
+</body>
+</html>
