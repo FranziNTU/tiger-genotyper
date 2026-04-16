@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tiger Microsatellite Sampler</title>
+
+<style>
+body {
+  font-family: Arial, sans-serif;
+  padding: 1.2rem;
+  max-width: 1200px;
+  margin: auto;
+}
+.hidden { display: none; }
+.controls { margin: 0.6rem 0; }
+h2,h3,h4 { margin-bottom: 0.4rem; }
+
+.pill {
+  display:inline-block;
+  padding:0.25rem 0.6rem;
+  border-radius:999px;
+  background:#eef;
+  margin-right:0.5rem;
+}
+button {
+  padding:0.45rem 0.9rem;
+  margin-right:0.4rem;
+}
+table {
+  border-collapse:collapse;
+  width:100%;
+  margin-top:0.6rem;
+}
+th, td {
+  border:1px solid #ccc;
+  padding:0.35rem;
+  text-align:center;
+}
+th { background:#f5f5f5; }
+svg { background:#111; border-radius:4px; }
+.warning {
+  background:#fff3cd;
+  border:1px solid #ffeeba;
+  padding:0.8rem;
+}
+.success {
+  background:#e6fffa;
+  border:1px solid #b2f5ea;
+  padding:0.8rem;
+}
+.danger {
+  background:#fde8e8;
+  border:1px solid #f5b5b5;
+  padding:0.8rem;
+}
+</style>
+</head>
+
+<body>
+
+<h2>Tiger Microsatellite Sampler</h2>
+
+<!-- ================= ADMIN ================= -->
+<div id="admin" class="hidden">
+  <h3>Session setup (staff)</h3>
+
+  <table>
+    <tr><th>Group</th><th>Max individuals</th><th>Max loci</th></tr>
+    <tr><td>G1</td><td><input id="G1_i" type="number"></td><td><input id="G1_l" type="number"></td></tr>
+    <tr><td>G2</td><td><input id="G2_i" type="number"></td><td><input id="G2_l" type="number"></td></tr>
+    <tr><td>G3</td><td><input id="G3_i" type="number"></td><td><input id="G3_l" type="number"></td></tr>
+    <tr><td>G4</td><td><input id="G4_i" type="number"></td><td><input id="G4_l" type="number"></td></tr>
+    <tr><td>G5</td><td><input id="G5_i" type="number"></td><td><input id="G5_l" type="number"></td></tr>
+    <tr><td>G6</td><td><input id="G6_i" type="number"></td><td><input id="G6_l" type="number"></td></tr>
+  </table>
+
+  <div class="controls">
+    <button id="startSampling">Start new sampling session</button>
+    <button id="resetSession">Reset everything (staff)</button>
+  </div>
+
+  <div id="adminMsg" class="success hidden"></div>
+</div>
+
+<!-- ================= STALE ================= -->
+<div id="stale" class="danger hidden">
+  <strong>Sampling session ended.</strong><br>
+  This link belongs to a previous session.
+  <div class="controls">
+    <button id="leaveBtn">Leave session</button>
+  </div>
+</div>
+
+<!-- ================= WAIT ================= -->
+<div id="wait" class="warning hidden">
+  <strong>Sampling not yet enabled.</strong><br>
+  Please wait for your instructor.
+  <div class="controls">
+    <button id="leaveBtn2">Leave session</button>
+  </div>
+</div>
+
+<!-- ================= SAMPLING ================= -->
+<div id="sampling" class="hidden">
+
+  <h3>Currently sampling</h3>
+  <div class="controls">
+    <span class="pill" id="pillGroup"></span>
+    <span class="pill" id="pillTiger"></span>
+    <button id="leaveBtn3">Leave session</button>
+  </div>
+
+  <svg width="420" height="90" viewBox="0 0 420 90">
+    <polyline id="chromTrace" fill="none" stroke="#2ecc71" stroke-width="2"></polyline>
+  </svg>
+
+  <table id="currentTable"></table>
+
+  <div class="controls">
+    <button id="addBtn">Add this individual</button>
+    <button id="csvBtn">Download CSV</button>
+  </div>
+
+  <h4>Dataset collected by your group</h4>
+  <table id="dataTable"></table>
+</div>
+
+<script>
+/* ---------- DATA ---------- */
+const DB = {
+  KAN_014:{Reserve:'Kanha',Latitude:22.334,loci:{
+    MS01:[102,104],MS02:[100,100],MS03:[106,108],MS04:[104,106],
+    MS05:[102,102],MS06:[110,112],MS07:[98,100],MS08:[120,122]
+  }},
+  SIM_003:{Reserve:'Simlipal',Latitude:21.93,loci:{
+    MS01:[108,110],MS02:[108,108],MS03:[106,110],MS04:[104,106],
+    MS05:[102,102],MS06:[114,114],MS07:[96,98],MS08:[118,120]
+  }}
+};
+
+/* ---------- DOM ---------- */
+const admin = adminMsg = pillGroup = pillTiger = chromTrace =
+currentTable = dataTable = null;
+
+const el = id => document.getElementById(id);
+const adminDiv = el('admin'), waitDiv = el('wait'),
+samplerDiv = el('sampling'), staleDiv = el('stale');
+
+/* ---------- HELPERS ---------- */
+function show(e){ e.classList.remove('hidden'); }
+function hide(e){ e.classList.add('hidden'); }
+function leaveSession(){
+  ['groupId','session_seen','dataset_G1','dataset_G2','dataset_G3','dataset_G4','dataset_G5','dataset_G6']
+  .forEach(k=>localStorage.removeItem(k));
+  location.href = location.pathname;
+}
+
+/* ---------- ROUTING ---------- */
+const params = new URLSearchParams(location.search);
+const tiger = params.get('tiger');
+const validTiger = tiger && DB[tiger];
+
+const activeSession = localStorage.getItem('SESSION_ID');
+const seenSession   = localStorage.getItem('session_seen');
+
+hide(adminDiv); hide(waitDiv); hide(samplerDiv); hide(staleDiv);
+
+if (!validTiger) {
+  show(adminDiv);
+}
+else if (seenSession && activeSession && seenSession !== activeSession) {
+  show(staleDiv);
+}
+else if (!activeSession) {
+  show(waitDiv);
+}
+else {
+  samplingEntry();
+}
+
+/* ---------- ADMIN ---------- */
+el('startSampling').onclick = () => {
+  const sid = crypto.randomUUID();
+  localStorage.setItem('SESSION_ID', sid);
+
+  ['G1','G2','G3','G4','G5','G6'].forEach(g=>{
+    const i = el(g+'_i').value;
+    const l = el(g+'_l').value;
+    if (i && l) {
+      localStorage.setItem('cfg_'+g, JSON.stringify({
+        maxIndividuals:+i,
+        maxLoci:+l,
+        session:sid
+      }));
+      localStorage.removeItem('dataset_'+g);
+    }
+  });
+
+  el('adminMsg').textContent = '✅ New sampling session started.';
+  show(el('adminMsg'));
+};
+
+el('resetSession').onclick = ()=>{
+  if(prompt('Staff code')!=='RESET2026') return;
+  localStorage.clear();
+  alert('Session fully reset.');
+  location.reload();
+};
+
+/* ---------- SAMPLING ---------- */
+function samplingEntry(){
+  localStorage.setItem('session_seen', localStorage.getItem('SESSION_ID'));
+
+  let group = localStorage.getItem('groupId');
+  if(!group){
+    group = prompt('Enter your group ID (G1–G6)');
+    localStorage.setItem('groupId',group);
+  }
+
+  const cfg = JSON.parse(localStorage.getItem('cfg_'+group)||'null');
+  if(!cfg || cfg.session!==localStorage.getItem('SESSION_ID')){
+    show(staleDiv); return;
+  }
+
+  show(samplerDiv);
+  el('pillGroup').textContent='Group: '+group;
+  el('pillTiger').textContent='Tiger: '+tiger;
+
+  const loci = Object.keys(DB[tiger].loci).slice(0,cfg.maxLoci);
+  const DATA_KEY='dataset_'+group;
+  let data = JSON.parse(localStorage.getItem(DATA_KEY)||'[]');
+
+  renderCurrent();
+  animateChrom();
+  renderData();
+
+  el('addBtn').onclick=()=>{
+    if(data.length>=cfg.maxIndividuals) return alert('Limit reached');
+    if(data.some(d=>d.Individual===tiger))return alert('Already sampled');
+
+    const r={Reserve:DB[tiger].Reserve,Latitude:DB[tiger].Latitude,Individual:tiger};
+    loci.forEach(l=>{r[l+'_A']=DB[tiger].loci[l][0];r[l+'_B']=DB[tiger].loci[l][1];});
+    data.push(r);
+    localStorage.setItem(DATA_KEY,JSON.stringify(data));
+    renderData();
+  };
+
+  el('csvBtn').onclick=()=>{
+    if(!data.length)return;
+    const cols=Object.keys(data[0]);
+    const csv=[cols.join(',')].concat(
+      data.map(r=>cols.map(c=>r[c]).join(','))
+    ).join('\n');
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(new Blob([csv]));
+    a.download=group+'_tigers.csv';
+    a.click();
+  };
+}
+
+/* ---------- RENDER ---------- */
+function renderCurrent(){
+  currentTable.innerHTML='<tr><th>Locus</th><th>A</th><th>B</th></tr>';
+  Object.entries(DB[tiger].loci).slice(0,8).forEach(([l,[a,b]])=>{
+    currentTable.innerHTML+=`<tr><td>${l}</td><td>${a}</td><td>${b}</td></tr>`;
+  });
+}
+function renderData(){
+  dataTable.innerHTML='';
+}
+function animateChrom(){
+  let pts=[],x=0,p=0;
+  chromTrace.setAttribute('points','');
+  (function f(){
+    if(x>420)return;
+    pts.push(`${x},${45+Math.sin(p)*12}`);
+    chromTrace.setAttribute('points',pts.join(' '));
+    x+=6;p+=0.3;requestAnimationFrame(f);
+  })();
+}
+
+/* ---------- LEAVE BUTTONS ---------- */
+['leaveBtn','leaveBtn2','leaveBtn3'].forEach(id=>{
+  const b = el(id); if(b) b.onclick = leaveSession;
+});
+</script>
+
+</body>
+</html>
