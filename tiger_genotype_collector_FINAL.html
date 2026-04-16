@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Tiger Genotype Collector</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+ body{font-family:Arial, sans-serif;padding:1.5rem;max-width:1000px;margin:auto}
+ h2{margin-bottom:0.2rem}
+ h3{margin-top:1.2rem}
+ p{margin-top:0.2rem}
+ table{border-collapse:collapse;width:100%;margin-top:1rem}
+ th,td{border:1px solid #ccc;padding:0.5rem;text-align:center}
+ input{width:90%;padding:0.4rem}
+ button{margin-top:1rem;padding:0.6rem;width:100%;font-size:1rem}
+ .locked{color:#aaa}
+ .hidden{display:none}
+</style>
+</head>
+<body>
+
+<h2>Tiger Genotype Collector</h2>
+<h3 id="setupTitle">Instructor setup (complete once, then click Save & Begin)</h3>
+<p id="setupMsg">Enter agreed limits for each group. Once saved, the system switches permanently to sampling mode.</p>
+
+<div id="adminPanel">
+<table>
+<thead>
+<tr>
+<th>Group</th>
+<th>Max individuals</th>
+<th>Max loci</th>
+</tr>
+</thead>
+<tbody>
+<tr><td>G1</td><td><input id="G1_t" type="number" min="1"></td><td><input id="G1_l" type="number" min="1" max="30"></td></tr>
+<tr><td>G2</td><td><input id="G2_t" type="number" min="1"></td><td><input id="G2_l" type="number" min="1" max="30"></td></tr>
+<tr><td>G3</td><td><input id="G3_t" type="number" min="1"></td><td><input id="G3_l" type="number" min="1" max="30"></td></tr>
+<tr><td>G4</td><td><input id="G4_t" type="number" min="1"></td><td><input id="G4_l" type="number" min="1" max="30"></td></tr>
+<tr><td>G5</td><td><input id="G5_t" type="number" min="1"></td><td><input id="G5_l" type="number" min="1" max="30"></td></tr>
+<tr><td>G6</td><td><input id="G6_t" type="number" min="1"></td><td><input id="G6_l" type="number" min="1" max="30"></td></tr>
+</tbody>
+</table>
+<button id="saveBtn">Save limits & begin sampling</button>
+</div>
+
+<div id="collector" class="hidden">
+<h3>Sampling mode</h3>
+<p><strong>Tiger:</strong> <span id="tigerId"></span></p>
+<p><strong>Group:</strong> <span id="group"></span></p>
+<p>Tigers collected: <span id="count"></span></p>
+<table>
+<thead><tr><th>Locus</th><th>A</th><th>B</th></tr></thead>
+<tbody id="geno"></tbody>
+</table>
+<button onclick="addTiger()">Add tiger to dataset</button>
+<button onclick="downloadCSV()">Download group dataset (CSV)</button>
+</div>
+
+<script>
+const GENO={
+  'KAN_014':{reserve:'Kanha',loci:{MS01:[102,104],MS02:[100,100],MS03:[106,108],MS04:[104,106],MS05:[102,102]}},
+  'SIM_003':{reserve:'Simlipal',loci:{MS01:[108,110],MS02:[108,108],MS03:[106,110],MS04:[104,106],MS05:[102,102]}},
+  'ZOO_003':{reserve:'Zoo',loci:{MS01:[102,102],MS02:[100,102],MS03:[104,104],MS04:[106,106],MS05:[102,104]}}
+};
+
+const params=new URLSearchParams(window.location.search);
+const tiger=params.get('tiger');
+
+document.getElementById('saveBtn').addEventListener('click', ()=>{
+  const groups=['G1','G2','G3','G4','G5','G6'];
+  let any=false;
+  groups.forEach(g=>{
+    const t=document.getElementById(g+'_t').value;
+    const l=document.getElementById(g+'_l').value;
+    if(t && l){
+      localStorage.setItem('cfg_'+g,JSON.stringify({maxTigers:+t,maxLoci:+l}));
+      any=true;
+    }
+  });
+  if(!any){ alert('Please enter values for at least one group'); return; }
+  localStorage.setItem('sampling_live','true');
+  location.href = location.pathname + '?mode=sampling';
+});
+
+if((params.get('mode')==='sampling' || tiger) && localStorage.getItem('sampling_live')==='true'){
+  if(tiger){ startSampling(tiger); }
+  else{
+    document.getElementById('adminPanel').classList.add('hidden');
+    document.getElementById('setupTitle').textContent='Sampling mode active';
+    document.getElementById('setupMsg').textContent='Students may now scan QR codes to collect data.';
+  }
+}
+
+function startSampling(tigerId){
+  document.getElementById('adminPanel').classList.add('hidden');
+  document.getElementById('collector').classList.remove('hidden');
+
+  const g=prompt('Enter your group ID (G1–G6)');
+  const cfg=JSON.parse(localStorage.getItem('cfg_'+g));
+  if(!cfg){ alert('Group not configured'); return; }
+
+  const data=JSON.parse(localStorage.getItem('data_'+g)||'[]');
+  const t=GENO[tigerId];
+
+  document.getElementById('tigerId').textContent=tigerId;
+  document.getElementById('group').textContent=g;
+  document.getElementById('count').textContent=data.length+' / '+cfg.maxTigers;
+
+  const body=document.getElementById('geno'); body.innerHTML='';
+  Object.entries(t.loci).forEach((kv,i)=>{
+    const tr=document.createElement('tr');
+    if(i<cfg.maxLoci){ tr.innerHTML=`<td>${kv[0]}</td><td>${kv[1][0]}</td><td>${kv[1][1]}</td>`; }
+    else{ tr.innerHTML=`<td class='locked'>${kv[0]}</td><td class='locked'>–</td><td class='locked'>–</td>`; }
+    body.appendChild(tr);
+  });
+
+  window.addTiger=()=>{
+    if(data.length>=cfg.maxTigers){alert('Tiger limit reached');return;}
+    if(data.find(x=>x.id===tigerId)){alert('Already added');return;}
+    data.push({id:tigerId,reserve:t.reserve,loci:Object.fromEntries(Object.entries(t.loci).slice(0,cfg.maxLoci))});
+    localStorage.setItem('data_'+g,JSON.stringify(data));
+    document.getElementById('count').textContent=data.length+' / '+cfg.maxTigers;
+  };
+
+  window.downloadCSV=()=>{
+    let csv='Tiger,Reserve,Locus,A,B
+';
+    data.forEach(r=>{Object.entries(r.loci).forEach(l=>{
+      csv+=`${r.id},${r.reserve},${l[0]},${l[1][0]},${l[1][1]}
+`;
+    });});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+    a.download=g+'_genotypes.csv';
+    a.click();
+  };
+}
+</script>
+</body>
+</html>
