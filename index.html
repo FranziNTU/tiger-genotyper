@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tiger Microsatellite Sampler – Part A</title>
+
+<style>
+body {
+  font-family: Arial, sans-serif;
+  padding: 1.5rem;
+  max-width: 700px;
+  margin: auto;
+}
+.hidden { display: none; }
+
+button {
+  padding: 0.5rem 1rem;
+  margin-top: 0.6rem;
+}
+
+.warning {
+  background: #fff3cd;
+  border: 1px solid #ffeeba;
+  padding: 1rem;
+}
+
+.success {
+  background: #e6fffa;
+  border: 1px solid #b2f5ea;
+  padding: 1rem;
+}
+
+.danger {
+  background: #fde8e8;
+  border: 1px solid #f5b5b5;
+  padding: 1rem;
+}
+</style>
+</head>
+
+<body>
+
+<h2>Tiger Microsatellite Sampler</h2>
+
+<!-- ================= ADMIN ================= -->
+<div id="admin" class="hidden">
+  <h3>Session setup (staff)</h3>
+  <p>This page has no <code>?tiger=</code> parameter.</p>
+
+  <button id="startSession">Start new sampling session</button>
+  <button id="resetSession">Reset everything</button>
+
+  <div id="adminMsg" class="success hidden"></div>
+</div>
+
+<!-- ================= WAIT ================= -->
+<div id="wait" class="warning hidden">
+  <strong>Waiting for instructor to start sampling…</strong><br>
+  This page will update automatically.
+</div>
+
+<!-- ================= STALE ================= -->
+<div id="stale" class="danger hidden">
+  <strong>Sampling session ended.</strong><br>
+  Please rescan the QR code.
+</div>
+
+<!-- ================= SAMPLING ================= -->
+<div id="sampling" class="success hidden">
+  <h3>Sampling active</h3>
+  <p id="sampleInfo"></p>
+</div>
+
+<script>
+/* ---------- HELPERS ---------- */
+const el = id => document.getElementById(id);
+function show(e){ e.classList.remove('hidden'); }
+function hide(e){ e.classList.add('hidden'); }
+
+/* ---------- DOM ---------- */
+const adminDiv    = el('admin');
+const waitDiv     = el('wait');
+const staleDiv    = el('stale');
+const samplingDiv = el('sampling');
+const adminMsg    = el('adminMsg');
+
+/* ---------- INITIAL HIDE ---------- */
+[adminDiv, waitDiv, staleDiv, samplingDiv].forEach(hide);
+
+/* ---------- URL PARAM ---------- */
+const params = new URLSearchParams(location.search);
+const tiger  = params.get('tiger');
+
+/* ---------- SESSION STATE ---------- */
+const activeSession = localStorage.getItem('SESSION_ID');
+const seenSession   = localStorage.getItem('session_seen');
+
+/* ---------- ROUTING ---------- */
+
+// ADMIN MODE
+if (!tiger) {
+  show(adminDiv);
+}
+
+// STALE LINK
+else if (seenSession && activeSession && seenSession !== activeSession) {
+  show(staleDiv);
+}
+
+// WAITING — ✅ AUTO‑ADVANCE
+else if (!activeSession) {
+  show(waitDiv);
+
+  const poll = setInterval(() => {
+    const sid = localStorage.getItem('SESSION_ID');
+    if (sid) {
+      clearInterval(poll);
+      location.reload();
+    }
+  }, 1000);
+}
+
+// SAMPLING
+else {
+  localStorage.setItem('session_seen', activeSession);
+  show(samplingDiv);
+  el('sampleInfo').textContent =
+    'Sampling individual: ' + tiger +
+    ' (session ' + activeSession + ')';
+}
+
+/* ---------- ADMIN CONTROLS ---------- */
+el('startSession').onclick = () => {
+  const sid = crypto.randomUUID();
+  localStorage.setItem('SESSION_ID', sid);
+  adminMsg.textContent =
+    '✅ Sampling session started (' + sid.slice(0,8) + ')';
+  show(adminMsg);
+};
+
+el('resetSession').onclick = () => {
+  if (!confirm('Clear all session state?')) return;
+  localStorage.clear();
+  location.reload();
+};
+</script>
+
+</body>
+</html>
