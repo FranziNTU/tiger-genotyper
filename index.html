@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Tiger Microsatellite Sampler</title>
+<style>
+  body { font-family: Arial, sans-serif; padding: 1.2rem; max-width: 1200px; margin: auto; }
+  h2 { margin: 0 0 0.25rem 0; }
+  h3 { margin: 0.75rem 0 0.25rem 0; }
+  .hidden { display: none; }
+  .controls { margin-bottom: 0.75rem; }
+  .pill { display:inline-block; padding:0.25rem 0.5rem; border-radius:999px; background:#eef; margin-right:0.5rem; }
+  table { border-collapse: collapse; width: 100%; margin-top: 0.75rem; }
+  th, td { border: 1px solid #ccc; padding: 0.35rem; text-align: center; font-size: 0.9rem; }
+  th { background: #f6f6f6; }
+  button { padding: 0.45rem 0.7rem; margin-right: 0.4rem; }
+  input { padding: 0.25rem; width: 5rem; }
+  .note { font-size: 0.85rem; color:#555; }
+  .warning { background:#fff3cd; border:1px solid #ffeeba; padding:0.75rem; margin:0.75rem 0; }
+  .success { background:#e6fffa; border:1px solid #b2f5ea; padding:0.75rem; margin-top:0.75rem; }
+  svg { background:#111; border-radius:4px; }
+</style>
+</head>
+<body>
+
+<h2>Tiger Microsatellite Sampler</h2>
+
+<!-- ADMIN SETUP -->
+<div id="setup" class="controls hidden">
+  <h3>Session setup</h3>
+  <div class="note">Enter limits for each group, based on their budgets.</div>
+  <table>
+    <tr><th>Group</th><th>Max Individuals</th><th>Max Loci</th></tr>
+    <tr><td>G1</td><td><input id="G1_i" type="number"></td><td><input id="G1_l" type="number" max="30"></td></tr>
+    <tr><td>G2</td><td><input id="G2_i" type="number"></td><td><input id="G2_l" type="number" max="30"></td></tr>
+    <tr><td>G3</td><td><input id="G3_i" type="number"></td><td><input id="G3_l" type="number" max="30"></td></tr>
+    <tr><td>G4</td><td><input id="G4_i" type="number"></td><td><input id="G4_l" type="number" max="30"></td></tr>
+    <tr><td>G5</td><td><input id="G5_i" type="number"></td><td><input id="G5_l" type="number" max="30"></td></tr>
+    <tr><td>G6</td><td><input id="G6_i" type="number"></td><td><input id="G6_l" type="number" max="30"></td></tr>
+  </table>
+  <button id="startBtn">Start sampling</button>
+  <button id="resetBtn">Reset session (staff)</button>
+  <div id="adminMsg" class="success hidden"></div>
+</div>
+
+<!-- WAIT PAGE -->
+<div id="waitMsg" class="warning hidden">
+  <strong>Sampling not yet started.</strong><br>
+  Please wait until your instructor has finished session setup.
+  <div class="controls" style="margin-top:0.75rem;">
+    <button id="leaveGroupBtn1">Reset my group (this device)</button>
+  </div>
+</div>
+
+<!-- SAMPLING PAGE -->
+<div id="sampling" class="hidden">
+  <div class="controls">
+    <span class="pill" id="pillGroup"></span>
+    <span class="pill" id="pillTiger"></span>
+    <button id="leaveGroupBtn2">Reset my group (this device)</button>
+  </div>
+
+  <div class="controls">
+    <svg width="420" height="90" viewBox="0 0 420 90" aria-label="Chromatogram">
+      <polyline id="traceLine" fill="none" stroke="#2ecc71" stroke-width="2" points="" />
+    </svg>
+    <div class="note">Simulated microsatellite chromatogram</div>
+  </div>
+
+  <div class="controls">
+    <button id="addBtn">Add individual to dataset</button>
+    <button id="csvBtn">Download CSV (wide format)</button>
+  </div>
+
+  <table id="table"></table>
+</div>
+
+<script>
+/******** DEMO GENOTYPES ********/
+const DB = {
+  'KAN_014':{Reserve:'Kanha',Latitude:22.334,Individual:'KAN_014',loci:{MS01:[102,104],MS02:[100,100],MS03:[106,108],MS04:[104,106],MS05:[102,102],MS06:[110,112],MS07:[98,100],MS08:[120,122],MS09:[154,156],MS10:[178,178]}},
+  'SIM_003':{Reserve:'Simlipal',Latitude:21.932,Individual:'SIM_003',loci:{MS01:[108,110],MS02:[108,108],MS03:[106,110],MS04:[104,106],MS05:[102,102],MS06:[114,114],MS07:[96,98],MS08:[118,120],MS09:[152,154],MS10:[180,182]}},
+  'ZOO_003':{Reserve:'Zoo',Latitude:0.0,Individual:'ZOO_003',loci:{MS01:[102,102],MS02:[100,102],MS03:[104,104],MS04:[106,106],MS05:[102,104],MS06:[110,110],MS07:[98,98],MS08:[120,120],MS09:[154,154],MS10:[178,180]}}
+};
+
+/******** ROUTING ********/
+const params = new URLSearchParams(location.search);
+const tiger = params.get('tiger');
+const SESSION_READY = localStorage.getItem('session_ready') === 'true';
+
+if (!tiger) setup.classList.remove('hidden');
+if (tiger && !SESSION_READY) waitMsg.classList.remove('hidden');
+
+/******** ADMIN ********/
+startBtn.onclick = () => {
+  ['G1','G2','G3','G4','G5','G6'].forEach(g=>{
+    const i=document.getElementById(g+'_i').value;
+    const l=document.getElementById(g+'_l').value;
+    if(i && l) localStorage.setItem('cfg_'+g, JSON.stringify({maxIndividuals:+i,maxLoci:+l}));
+  });
+  localStorage.setItem('session_ready','true');
+  adminMsg.textContent='✅ Sampling has started. Students may now scan QR codes.';
+  adminMsg.classList.remove('hidden');
+}
+resetBtn.onclick=()=>{
+  const c=prompt('Staff code required:');
+  if(c!=='RESET2026') return;
+  localStorage.clear(); alert('✅ Session reset complete.'); location.reload();
+};
+
+/******** SAMPLING ********/
+if(tiger && SESSION_READY && DB[tiger]){
+  let group=localStorage.getItem('groupId');
+  if(!group){ group=prompt('Enter your group ID (G1–G6):'); localStorage.setItem('groupId',group); }
+  const cfg=JSON.parse(localStorage.getItem('cfg_'+group)||'null');
+  if(cfg){
+    sampling.classList.remove('hidden');
+    pillGroup.textContent='Group: '+group;
+    pillTiger.textContent='Tiger: '+tiger;
+
+    const DATA_KEY='dataset_'+group;
+    let dataset=JSON.parse(localStorage.getItem(DATA_KEY)||'[]');
+
+    animateTrace(); renderTable();
+
+    addBtn.onclick=()=>{
+      if(dataset.length>=cfg.maxIndividuals) return alert('Individual limit reached');
+      if(dataset.find(d=>d.Individual===tiger)) return alert('Already added');
+      const row=DB[tiger];
+      const loci=Object.keys(row.loci).slice(0,cfg.maxLoci);
+      const rec={Reserve:row.Reserve,Latitude:row.Latitude,Individual:row.Individual};
+      loci.forEach(k=>{rec[k+'_A']=row.loci[k][0]; rec[k+'_B']=row.loci[k][1];});
+      dataset.push(rec); localStorage.setItem(DATA_KEY,JSON.stringify(dataset)); renderTable();
+    };
+
+    csvBtn.onclick=()=>{
+      if(!dataset.length) return alert('No data');
+      const cols=Object.keys(dataset[0]);
+      let csv=cols.join(',')+'\n';
+      dataset.forEach(r=>{csv+=cols.map(c=>r[c]).join(',')+'\n';});
+      const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download=group+'_tiger_microsatellites_wide.csv'; a.click();
+    };
+
+    function renderTable(){
+      table.innerHTML=''; if(!dataset.length){table.innerHTML='<tr><td>No data yet</td></tr>';return;}
+      const cols=Object.keys(dataset[0]);
+      table.innerHTML='<tr>'+cols.map(c=>'<th>'+c+'</th>').join('')+'</tr>'+
+        dataset.map(r=>'<tr>'+cols.map(c=>'<td>'+r[c]+'</td>').join('')+'</tr>').join('');
+    }
+  }
+}
+
+/******** CHROMATOGRAM ********/
+function animateTrace(){
+  const pts=[]; let x=0,p=0; traceLine.setAttribute('points','');
+  (function tick(){ if(x>420) return; pts.push(x+','+(45+Math.sin(p)*(10+Math.random()*6)).toFixed(1)); traceLine.setAttribute('points',pts.join(' ')); x+=6; p+=0.3; requestAnimationFrame(tick); })();
+}
+
+/******** RESET MY GROUP ********/
+function resetMyGroup(){ localStorage.removeItem('groupId'); alert('✅ This device has been removed from its group.'); location.reload(); }
+leaveGroupBtn1.onclick=resetMyGroup; leaveGroupBtn2.onclick=resetMyGroup;
+</script>
+</body>
+</html>
