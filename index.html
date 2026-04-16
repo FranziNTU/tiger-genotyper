@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Tiger Microsatellite Sampler</title>
+<style>
+body { font-family: Arial, sans-serif; padding: 1.2rem; max-width: 1200px; margin: auto; }
+h2,h3,h4 { margin-bottom:0.4rem; }
+.hidden { display:none; }
+.controls { margin:0.6rem 0; }
+.pill { display:inline-block; padding:0.25rem 0.6rem; border-radius:999px; background:#eef; margin-right:0.5rem; }
+button { padding:0.45rem 0.9rem; margin-right:0.4rem; }
+table { border-collapse:collapse; width:100%; margin-top:0.6rem; }
+th,td { border:1px solid #ccc; padding:0.35rem; text-align:center; }
+th { background:#f5f5f5; }
+svg { background:#111; border-radius:4px; }
+.warning { background:#fff3cd; border:1px solid #ffeeba; padding:0.8rem; }
+.success { background:#e6fffa; border:1px solid #b2f5ea; padding:0.8rem; }
+</style>
+</head>
+<body>
+
+<h2>Tiger Microsatellite Sampler</h2>
+
+<div id="admin" class="hidden">
+<h3>Session setup (staff)</h3>
+<p>Enter limits for each group.</p>
+<table>
+<tr><th>Group</th><th>Max Individuals</th><th>Max Loci</th></tr>
+<tr><td>G1</td><td><input id="G1_i" type="number"></td><td><input id="G1_l" type="number"></td></tr>
+<tr><td>G2</td><td><input id="G2_i" type="number"></td><td><input id="G2_l" type="number"></td></tr>
+<tr><td>G3</td><td><input id="G3_i" type="number"></td><td><input id="G3_l" type="number"></td></tr>
+<tr><td>G4</td><td><input id="G4_i" type="number"></td><td><input id="G4_l" type="number"></td></tr>
+<tr><td>G5</td><td><input id="G5_i" type="number"></td><td><input id="G5_l" type="number"></td></tr>
+<tr><td>G6</td><td><input id="G6_i" type="number"></td><td><input id="G6_l" type="number"></td></tr>
+</table>
+<div class="controls">
+<button id="startSampling">Start sampling</button>
+<button id="resetSession">Reset session (staff)</button>
+</div>
+<div id="adminMsg" class="success hidden"></div>
+</div>
+
+<div id="wait" class="warning hidden">
+<strong>Sampling not yet started.</strong><br>
+Please wait for your instructor.
+<div class="controls"><button id="resetMyGroup1">Reset my group (this device)</button></div>
+</div>
+
+<div id="sampling" class="hidden">
+<h3>Currently sampling</h3>
+<div class="controls">
+<span class="pill" id="pillGroup"></span>
+<span class="pill" id="pillTiger"></span>
+<button id="resetMyGroup2">Reset my group</button>
+</div>
+
+<svg width="420" height="90" viewBox="0 0 420 90">
+  <polyline id="chromTrace" fill="none" stroke="#2ecc71" stroke-width="2" points="" />
+</svg>
+
+<div class="controls">
+<button id="addBtn">Add this individual</button>
+<button id="csvBtn">Download CSV</button>
+</div>
+
+<h4>Dataset already collected by your group</h4>
+<table id="dataTable"></table>
+</div>
+
+<script>
+const DB={
+KAN_014:{Reserve:'Kanha',Latitude:22.334,loci:{MS01:[102,104],MS02:[100,100],MS03:[106,108],MS04:[104,106],MS05:[102,102],MS06:[110,112],MS07:[98,100],MS08:[120,122]}},
+SIM_003:{Reserve:'Simlipal',Latitude:21.93,loci:{MS01:[108,110],MS02:[108,108],MS03:[106,110],MS04:[104,106],MS05:[102,102],MS06:[114,114],MS07:[96,98],MS08:[118,120]}},
+ZOO_003:{Reserve:'Zoo',Latitude:0.0,loci:{MS01:[102,102],MS02:[100,102],MS03:[104,104],MS04:[106,106],MS05:[102,104],MS06:[110,110],MS07:[98,98],MS08:[120,120]}}
+};
+
+const params=new URLSearchParams(location.search);
+const tiger=params.get('tiger');
+const ready=localStorage.getItem('session_ready')==='true';
+
+function show(x){x.classList.remove('hidden');}
+function hide(x){x.classList.add('hidden');}
+
+hide(admin); hide(wait); hide(sampling);
+
+if(!tiger){ show(admin); }
+else if(!ready){ show(wait); }
+else{ samplingEntry(); }
+
+startSampling.onclick=()=>{
+['G1','G2','G3','G4','G5','G6'].forEach(g=>{
+ const i=document.getElementById(g+'_i').value;
+ const l=document.getElementById(g+'_l').value;
+ if(i&&l) localStorage.setItem('cfg_'+g,JSON.stringify({maxIndividuals:+i,maxLoci:+l}));
+});
+localStorage.setItem('session_ready','true');
+adminMsg.textContent='✅ Sampling started. Students may now scan QR codes.';
+show(adminMsg);
+};
+
+resetSession.onclick=()=>{
+ if(prompt('Staff code')!=='RESET2026')return;
+ localStorage.clear(); alert('✅ Session reset complete.'); location.reload();
+};
+
+function samplingEntry(){
+ let group=localStorage.getItem('groupId');
+ if(!group){ group=prompt('Enter your group ID (G1–G6)'); localStorage.setItem('groupId',group); }
+ const cfg=JSON.parse(localStorage.getItem('cfg_'+group)||'null');
+ if(!cfg){ show(wait); return; }
+
+ show(sampling);
+ pillGroup.textContent='Group: '+group;
+ pillTiger.textContent='Tiger: '+tiger;
+
+ const key='dataset_'+group;
+ let data=JSON.parse(localStorage.getItem(key)||'[]');
+ animateChrom(); render();
+
+ addBtn.onclick=()=>{
+  if(data.length>=cfg.maxIndividuals) return alert('Individual limit reached');
+  if(data.find(d=>d.Individual===tiger)) return alert('Already sampled');
+  const src=DB[tiger];
+  const loci=Object.keys(src.loci).slice(0,cfg.maxLoci);
+  const rec={Reserve:src.Reserve,Latitude:src.Latitude,Individual:tiger};
+  loci.forEach(l=>{const [a,b]=src.loci[l]; rec[l+'_A']=a; rec[l+'_B']=b;});
+  data.push(rec); localStorage.setItem(key,JSON.stringify(data)); render();
+ };
+
+ csvBtn.onclick=()=>{
+  if(!data.length) return;
+  const cols=Object.keys(data[0]); let csv=cols.join(',')+'
+';
+  data.forEach(r=>{csv+=cols.map(c=>r[c]).join(',')+'
+';});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv])); a.download=group+'_tiger_genotypes.csv'; a.click();
+ };
+
+ function render(){
+  dataTable.innerHTML=''; if(!data.length){ dataTable.innerHTML='<tr><td>No data yet</td></tr>'; return; }
+  const cols=Object.keys(data[0]);
+  dataTable.innerHTML='<tr>'+cols.map(c=>'<th>'+c+'</th>').join('')+'</tr>'+
+   data.map(r=>'<tr>'+cols.map(c=>'<td>'+r[c]+'</td>').join('')+'</tr>').join('');
+ }
+}
+
+function animateChrom(){
+ const pts=[]; let x=0,p=0; chromTrace.setAttribute('points','');
+ (function t(){ if(x>420)return; pts.push(x+','+(45+Math.sin(p)*(10+Math.random()*6)).toFixed(1)); chromTrace.setAttribute('points',pts.join(' ')); x+=6; p+=0.3; requestAnimationFrame(t); })();
+}
+
+function resetGroup(){ localStorage.removeItem('groupId'); location.reload(); }
+resetMyGroup1.onclick=resetGroup; resetMyGroup2.onclick=resetGroup;
+</script>
+</body>
+</html>
